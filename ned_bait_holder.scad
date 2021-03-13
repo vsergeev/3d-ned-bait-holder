@@ -4,6 +4,8 @@
  * CC-BY-4.0
  *
  * Release Notes
+ *  * v1.1 - 03/12/2021
+ *      * Add corner radius to box.
  *  * v1.0 - 11/01/2020
  *      * Initial release.
  ********************************************************/
@@ -33,6 +35,9 @@ cutout_relative_diameter = 0.55;
 // fraction from 0 to 1
 cutout_relative_offset = 0.15;
 
+// in mm
+corner_radius = 1.5 * wall_thickness;
+
 /* [Hidden] */
 
 $fn = 70;
@@ -58,7 +63,9 @@ width = sum(slot_widths) + (len(slot_widths) + 1) * wall_thickness;
 /******************************************************************************/
 
 module ned_bait_profile_box() {
-    square([width, slot_depth + 2 * wall_thickness], center=true);
+    offset(r=corner_radius)
+        offset(delta=-corner_radius)
+            square([width, slot_depth + 2 * wall_thickness], center=true);
 }
 
 module ned_bait_profile_slot(i) {
