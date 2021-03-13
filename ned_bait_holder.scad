@@ -11,13 +11,13 @@
 /* [Basic] */
 
 // in mm
-slots = [10, 10, 15, 15];
+slot_widths = [10, 10, 15, 15];
 
 // in mm
-height = 65;
+slot_height = 65;
 
 // in mm
-depth = 10;
+slot_depth = 10;
 
 // in mm
 wall_thickness = 1.5;
@@ -25,54 +25,95 @@ wall_thickness = 1.5;
 /* [Advanced] */
 
 // in mm
-drainage_diameter = 5;
+drainage_hole_diameter = 5;
 
 // fraction from 0 to 1
-slot_relative_diameter = 0.55;
+cutout_relative_diameter = 0.55;
 
 // fraction from 0 to 1
-slot_relative_offset = 0.15;
+cutout_relative_offset = 0.15;
 
 /* [Hidden] */
 
 $fn = 70;
 
-module ned_bait_holder_slot(width, height, depth, wall_thickness) {
-    slot_height = height * (1 - slot_relative_offset);
-    slot_diameter = slot_relative_diameter * width;
+fudge_factor = 0.1;
 
-    difference() {
-        /* Outside profile */
-        cube([width + wall_thickness * 2, depth + wall_thickness * 2, height + wall_thickness]);
-        /* Inside profile */
-        translate([wall_thickness, wall_thickness, wall_thickness])
-            cube([width, depth, height + wall_thickness]);
-        /* Drainage hole */
-        translate([(width + wall_thickness * 2) / 2, (depth + wall_thickness * 2) / 2, -wall_thickness * 2])
-            cylinder(h=wall_thickness * 4, d=drainage_diameter);
-        /* Slot */
-        translate([(width + wall_thickness * 2) / 2, 0, wall_thickness + slot_relative_offset * height])
-            union() {
-                translate([-slot_diameter / 2, -wall_thickness * 2, slot_diameter / 2])
-                    cube([slot_diameter, wall_thickness * 4, slot_height - slot_diameter / 3]);
-                translate([0, wall_thickness * 2, slot_diameter / 2])
-                    rotate([90, -90, 0])
-                        cylinder(h=wall_thickness * 4, d=slot_diameter);
-            }
+/******************************************************************************/
+/* Helper Functions */
+/******************************************************************************/
+
+function sum(v, i = 0) = (i < len(v)) ? v[i] + sum(v, i + 1) : 0;
+
+function cumsum(v, i) = (i < 0) ? 0 : v[i] + cumsum(v, i - 1);
+
+/******************************************************************************/
+/* Derived Parameters */
+/******************************************************************************/
+
+width = sum(slot_widths) + (len(slot_widths) + 1) * wall_thickness;
+
+/******************************************************************************/
+/* 2D Profiles */
+/******************************************************************************/
+
+module ned_bait_profile_box() {
+    square([width, slot_depth + 2 * wall_thickness], center=true);
+}
+
+module ned_bait_profile_slot(i) {
+    square([slot_widths[i], slot_depth], center=true);
+}
+
+module ned_bait_profile_cutout(i) {
+    cutout_width = cutout_relative_diameter * slot_widths[i];
+
+    union() {
+        translate([0, cutout_width / 2])
+            circle(d = cutout_width);
+
+        translate([-cutout_width / 2, cutout_width / 2])
+            square([cutout_width, slot_height]);
     }
 }
 
-module ned_bait_holder(slots, height, depth, wall_thickness) {
-    function cumsum(i) = (i < 0) ? 0 : slots[i] + wall_thickness + cumsum(i - 1);
+module ned_bait_profile_drainage_hole() {
+    circle(d = drainage_hole_diameter);
+}
 
-    offsets = [for (i = [-1 : len(slots) - 1]) cumsum(i)];
+/******************************************************************************/
+/* 3D Extrusions */
+/******************************************************************************/
 
-    union() {
-        for (i = [0 : len(slots) - 1]) {
-            translate([offsets[i], 0, 0])
-                ned_bait_holder_slot(slots[i], height, depth, wall_thickness);
+module ned_bait_holder() {
+    slot_centers = [
+        for (i = [0 : len(slot_widths) - 1])
+            (-width / 2 + wall_thickness + slot_widths[i] / 2) + (wall_thickness * i + cumsum(slot_widths, i - 1))
+    ];
+
+    difference() {
+        /* Base */
+        linear_extrude(slot_height + wall_thickness)
+            ned_bait_profile_box();
+
+        for (i = [0 : len(slot_widths) - 1]) {
+            /* Slot */
+            translate([slot_centers[i], 0, wall_thickness])
+                linear_extrude(slot_height + fudge_factor)
+                    ned_bait_profile_slot(i);
+
+            /* Slot Cutout */
+            translate([slot_centers[i], -(slot_depth - fudge_factor) / 2, cutout_relative_offset * slot_height + wall_thickness])
+                rotate([90, 0, 0])
+                    linear_extrude(wall_thickness + fudge_factor)
+                        ned_bait_profile_cutout(i);
+
+            /* Drainage Hole */
+            translate([slot_centers[i], 0, -fudge_factor/2])
+                linear_extrude(wall_thickness + fudge_factor)
+                  ned_bait_profile_drainage_hole();
         }
     }
 }
 
-ned_bait_holder(slots, height, depth, wall_thickness);
+ned_bait_holder();
